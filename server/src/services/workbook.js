@@ -1,13 +1,16 @@
 import ExcelJS from 'exceljs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { access } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import locations, { listPlaces } from './locations.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 
 const dataDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../data');
-export const workbookPath = path.join(dataDir, process.env.NODE_ENV === 'test' ? `aqi-history.test-${process.env.VITEST_POOL_ID || process.pid}.xlsx` : 'aqi-history.xlsx');
+const workbookDir = process.env.VERCEL
+  ? path.join(process.env.TMPDIR || process.env.TEMP || '/tmp', 'hazesingapore')
+  : dataDir;
+export const workbookPath = path.join(workbookDir, process.env.NODE_ENV === 'test' ? `aqi-history.test-${process.env.VITEST_POOL_ID || process.pid}.xlsx` : 'aqi-history.xlsx');
 let queue = Promise.resolve();
 
 const sheets = {
@@ -34,6 +37,7 @@ function objectRows(sheet) {
 
 async function loadWorkbook() {
   const workbook = new ExcelJS.Workbook();
+  await mkdir(path.dirname(workbookPath), { recursive: true });
   try {
     await access(workbookPath);
     await workbook.xlsx.readFile(workbookPath);
@@ -67,7 +71,10 @@ function serialized(operation) {
 }
 
 async function save(workbook) {
-  try { await workbook.xlsx.writeFile(workbookPath); }
+  try {
+    await mkdir(path.dirname(workbookPath), { recursive: true });
+    await workbook.xlsx.writeFile(workbookPath);
+  }
   catch (error) { throw new AppError(503, 'WORKBOOK_WRITE_FAILED', 'The Excel workbook could not be written. It may be open or the storage may be unavailable.', error.message); }
 }
 

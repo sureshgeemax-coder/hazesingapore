@@ -12,23 +12,10 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
   const [cooldown, setCooldown] = useState(360);
   const [escalation, setEscalation] = useState(20);
   const [history, setHistory] = useState<AlertHistoryItem[]>([]);
-  const [adminKey, setAdminKey] = useState('');
   const [status, setStatus] = useState('Loading protected settings…');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const savedKey = window.localStorage.getItem('haze-admin-key') || '';
-    setAdminKey(savedKey);
-  }, []);
-
-  useEffect(() => {
-    if (!adminKey) {
-      setHistory([]);
-      setStatus('Enter your administrative API key to manage email alerts in production.');
-      return;
-    }
-    if (typeof window !== 'undefined') window.localStorage.setItem('haze-admin-key', adminKey);
-    Promise.all([api.alertSettings(adminKey), api.alertHistory(adminKey)])
+    Promise.all([api.alertSettings(''), api.alertHistory('')])
       .then(([config, attempts]) => {
         const data = config.data;
         onSaved(data);
@@ -39,39 +26,36 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
         setCooldown(data.alertCooldownMinutes);
         setEscalation(data.escalationStep);
         setHistory(attempts.data);
-        setStatus('Protected alert settings loaded successfully.');
+        setStatus('Alert settings loaded successfully.');
       })
       .catch((error) => {
         setHistory([]);
         setStatus(message(error));
       });
-  }, [adminKey, onSaved]);
+  }, [onSaved]);
 
   useEffect(() => { if (!settings) return; setThreshold(settings.alertThreshold ?? 90); setEnabled(settings.emailEnabled); setRefresh(settings.refreshIntervalMinutes); setCooldown(settings.alertCooldownMinutes); setEscalation(settings.escalationStep); }, [settings]);
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!adminKey) { setStatus('Enter your administrative API key before saving alert settings.'); return; }
     if (!activeLocation) { setStatus('Choose a dashboard location before saving an alert.'); return; }
     setStatus('Saving alert settings…');
     try {
       const payload = { monitoringMethod: activeMethod, monitoredDirection: activeLocation.direction, monitoredPlaceId: activeLocation.type === 'place' ? activeLocation.id : settings?.monitoredPlaceId || 'pasir-ris', monitoredMrtLineId: activeLocation.type === 'station' ? activeLineId : settings?.monitoredMrtLineId || 'purple', monitoredStationId: activeLocation.type === 'station' ? activeLocation.id : settings?.monitoredStationId || 'sengkang', alertThreshold: Number(threshold), recipientEmail: recipient, emailEnabled: enabled, refreshIntervalMinutes: Number(refresh), alertCooldownMinutes: Number(cooldown), escalationStep: Number(escalation) };
-      const result = await api.saveAlertSettings(payload, adminKey); onSaved(result.data); setStatus(`Alert settings saved for ${activeLocation.name}. Backend monitoring is active while the server runs.`);
+      const result = await api.saveAlertSettings(payload, ''); onSaved(result.data); setStatus(`Alert settings saved for ${activeLocation.name}. Backend monitoring is active while the server runs.`);
     } catch (error) { setStatus(message(error)); }
   }
   async function testEmail() {
-    if (!adminKey) { setStatus('Enter your administrative API key before sending a test email.'); return; }
     setStatus('Sending configuration test…');
     try {
-      const result = await api.testEmail(recipient, adminKey);
+      const result = await api.testEmail(recipient, '');
       setStatus(result.data.result);
-      setHistory((await api.alertHistory(adminKey)).data);
+      setHistory((await api.alertHistory('')).data);
     } catch (error) { setStatus(message(error)); }
   }
   async function exportFile() {
-    if (!adminKey) { setStatus('Enter your administrative API key before exporting Excel.'); return; }
     setStatus('Preparing Excel export…');
-    try { await api.exportWorkbook(adminKey); setStatus('Workbook downloaded.'); } catch (error) { setStatus(message(error)); }
+    try { await api.exportWorkbook(''); setStatus('Workbook downloaded.'); } catch (error) { setStatus(message(error)); }
   }
 
   const methodLabel = activeMethod === 'mrt' ? 'MRT Line and Station' : 'Singapore Direction and Place';
@@ -79,7 +63,6 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
     <div className="panel-title"><span>Automatically follows active selection</span><h2>Email Alert Settings</h2></div>
     <div className="auto-monitor-target"><div><span>Monitoring method</span><strong>{methodLabel}</strong></div><div><span>Configured location</span><strong>{activeLocation?.name || 'Choose a location above'}</strong><small>{activeLocation ? `${activeLocation.direction} Singapore${activeLocation.type === 'station' ? ` · ${activeLocation.codes?.join(' / ')}` : ''}` : ''}</small></div></div>
     <form onSubmit={save}><div className="settings-grid">
-      <label>Administrative API key<input type="password" value={adminKey} placeholder="Enter ADMIN_KEY" autoComplete="current-password" onChange={(event) => setAdminKey(event.target.value.trim())} /><small>Stored in this browser only so protected alert actions can call the backend in production.</small></label>
       <label>AQI / PSI alert threshold<input type="number" min="0" max="500" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /><small>Strict rule: reading must be greater than {threshold} on the displayed provider scale.</small></label>
       <label>Recipient email<input type="email" value={recipient} placeholder="user@example.com" onChange={(event) => setRecipient(event.target.value)} required /></label>
       <label>Refresh interval (minutes)<input type="number" min="5" value={refresh} onChange={(event) => setRefresh(Number(event.target.value))} /></label>

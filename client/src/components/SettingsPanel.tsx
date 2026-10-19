@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../services/api';
-import type { AlertHistoryItem, AlertSettings, Location, SelectionMethod } from '../types';
+import type { AlertSettings, Location, SelectionMethod } from '../types';
 
 interface Props { settings: AlertSettings | null; activeMethod: SelectionMethod; activeLocation: Location | null; activeLineId?: string; onSaved: (settings: AlertSettings) => void }
 
@@ -11,12 +11,11 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
   const [refresh, setRefresh] = useState(10);
   const [cooldown, setCooldown] = useState(360);
   const [escalation, setEscalation] = useState(20);
-  const [history, setHistory] = useState<AlertHistoryItem[]>([]);
   const [status, setStatus] = useState('Loading protected settings…');
 
   useEffect(() => {
-    Promise.all([api.alertSettings(''), api.alertHistory('')])
-      .then(([config, attempts]) => {
+    api.alertSettings('')
+      .then((config) => {
         const data = config.data;
         onSaved(data);
         setThreshold(data.alertThreshold);
@@ -25,13 +24,9 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
         setRefresh(data.refreshIntervalMinutes);
         setCooldown(data.alertCooldownMinutes);
         setEscalation(data.escalationStep);
-        setHistory(attempts.data);
         setStatus('Alert settings loaded successfully.');
       })
-      .catch((error) => {
-        setHistory([]);
-        setStatus(message(error));
-      });
+      .catch((error) => setStatus(message(error)));
   }, [onSaved]);
 
   useEffect(() => { if (!settings) return; setThreshold(settings.alertThreshold ?? 90); setEnabled(settings.emailEnabled); setRefresh(settings.refreshIntervalMinutes); setCooldown(settings.alertCooldownMinutes); setEscalation(settings.escalationStep); }, [settings]);
@@ -50,7 +45,6 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
     try {
       const result = await api.testEmail(recipient, '');
       setStatus(result.data.result);
-      setHistory((await api.alertHistory('')).data);
     } catch (error) { setStatus(message(error)); }
   }
   async function exportFile() {
@@ -71,7 +65,6 @@ export function SettingsPanel({ settings, activeMethod, activeLocation, activeLi
       <label className="check"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /> Enable Email Alert</label>
     </div><div className="settings-actions"><button type="submit">Save Alert Settings</button><button type="button" className="secondary" onClick={testEmail}>Send Test Email</button><button type="button" className="secondary" onClick={exportFile}>Export Excel</button><span role="status">{status}</span></div></form>
     <div className="alert-state"><span>Last alert</span><strong>{settings?.lastAlertTime ? new Date(settings.lastAlertTime).toLocaleString('en-SG') : 'No alert attempted'}</strong><small>{settings?.lastAlertStatus}</small></div>
-    <div className="alert-history"><h3>Alert History</h3>{history.length ? <div className="table-wrap"><table><thead><tr><th>Time</th><th>Location</th><th>Reading / threshold</th><th>Status</th><th>Episode</th></tr></thead><tbody>{history.map((item) => <tr key={item.id}><td>{item.timestamp ? new Date(item.timestamp).toLocaleString('en-SG') : '—'}</td><td>{item.location}<small>{item.selectionMethod}</small></td><td>{item.aqi ?? 'Test'} / {item.threshold ?? '—'}</td><td>{item.status}<small>{item.error || item.result}</small></td><td><code>{item.episodeId || '—'}</code></td></tr>)}</tbody></table></div> : <div className="empty compact-empty">No alert attempts have been recorded.</div>}</div>
   </section>;
 }
 

@@ -8,7 +8,15 @@ import { AppError } from '../utils/errors.js';
 const episodes = new Map();
 
 function smtpTransport() {
-  if (!(env.smtp.host && env.smtp.user && env.smtp.password && env.smtp.from)) throw new AppError(503, 'SMTP_NOT_CONFIGURED', 'SMTP is not fully configured on the server.');
+  const missing = [
+    ['SMTP_HOST', env.smtp.host],
+    ['SMTP_USER', env.smtp.user],
+    ['SMTP_PASSWORD', env.smtp.password],
+    ['SMTP_FROM', env.smtp.from]
+  ].filter(([, value]) => !value).map(([key]) => key);
+  if (missing.length) {
+    throw new AppError(503, 'SMTP_NOT_CONFIGURED', `SMTP is not fully configured on the server. Missing: ${missing.join(', ')}.`);
+  }
   return nodemailer.createTransport({ host: env.smtp.host, port: env.smtp.port, secure: env.smtp.secure, auth: { user: env.smtp.user, pass: env.smtp.password }, disableFileAccess: true, disableUrlAccess: true });
 }
 
